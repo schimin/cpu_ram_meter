@@ -6,9 +6,10 @@ CpuMeter é um pequeno monitor de CPU/RAM para Windows desenvolvido em Python us
 
 - Mostra o uso atual de CPU em um marcador circular.
 - Exibe o uso de RAM em texto.
-- Janela sem borda.
+- Janela sem borda sempre no topo.
 - Arraste com o botão esquerdo do mouse.
 - Fecha com duplo-clique.
+- Vermelho quando valor acima de 90%.
 
 ## Requisitos
 
@@ -33,7 +34,7 @@ python main.py
 ```
 ## Para gerar o executável para windows
  ```bash
- python -m PyInstaller --onefile --noconsole main.py
+ python -m PyInstaller --onefile --noconsole -n CpuRamMeter main.py
 ```
 
 ## Observações

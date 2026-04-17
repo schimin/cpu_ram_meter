@@ -19,6 +19,7 @@ ARC_CPU    = "#333333"
 TEXT_LABEL = "#777777"
 TEXT_VALUE = "#222222"
 TEXT_RAM   = "#555555"
+COLOR_DANGER = "#e74c3c"  # Vermelho para alertas
 
 # Geometria do gauge
 CX, CY     = WIN_SIZE // 2, WIN_SIZE // 2
@@ -144,17 +145,20 @@ def update():
     cpu = psutil.cpu_percent(interval=None)
     ram = psutil.virtual_memory().percent
 
-    # Arco CPU
+    # Arco CPU e cor do alerta
+    cpu_color = COLOR_DANGER if cpu > 90 else ARC_CPU
     extent = (cpu / 100) * ARC_EXTENT
     if extent < 1:
-        extent = 1   # evita bug de arco "cheio" com extent=0
-    canvas.itemconfig(arc_cpu_id, extent=extent)
+        extent = 1
 
-    # Textos
-    canvas.itemconfig(val_cpu_id, text=str(int(cpu)))
-    canvas.itemconfig(lbl_ram_id, text=f"RAM {int(ram)} %")
+    canvas.itemconfig(arc_cpu_id, extent=extent, outline=cpu_color)
+
+    # Textos e cor da RAM
+    ram_color = COLOR_DANGER if ram > 90 else TEXT_RAM
+
+    canvas.itemconfig(val_cpu_id, text=str(int(cpu)), fill=cpu_color)
+    canvas.itemconfig(lbl_ram_id, text=f"RAM {int(ram)} %", fill=ram_color)
 
     root.after(UPDATE_MS, update)
-
 update()
 root.mainloop()
