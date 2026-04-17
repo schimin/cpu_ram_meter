@@ -10,6 +10,7 @@ CpuMeter é um pequeno monitor de CPU/RAM para Windows desenvolvido em Python us
 - Arraste com o botão esquerdo do mouse.
 - Fecha com duplo-clique.
 - Vermelho quando valor acima de 90%.
+- Aumenta e diminui o tamanho da janela usando scroll do mouse.
 
 ## Requisitos
 

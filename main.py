@@ -3,10 +3,10 @@ import math
 import psutil
 import sys
 
-# ── Configurações ──────────────────────────────────────────
-WIN_SIZE   = 220          # tamanho da janela (quadrado)
-WIN_ALPHA  = 0.96         # transparência (0.0 – 1.0)
-UPDATE_MS  = 1000         # atualização em milissegundos
+# ── Configurações Iniciais ──────────────────────────────────
+WIN_SIZE   = 220          # tamanho inicial
+WIN_ALPHA  = 0.96         # transparência
+UPDATE_MS  = 1000         # atualização
 DRAG_BTN   = "<B1-Motion>"
 
 # Cores
@@ -19,177 +19,155 @@ ARC_CPU    = "#333333"
 TEXT_LABEL = "#777777"
 TEXT_VALUE = "#222222"
 TEXT_RAM   = "#555555"
-COLOR_DANGER = "#e74c3c"  # Vermelho para alertas
+COLOR_DANGER = "#e74c3c"
 
-# Geometria do gauge
-CX, CY     = WIN_SIZE // 2, WIN_SIZE // 2
-RADIUS     = 85
-ARC_START  = 225          # graus (sentido Tkinter: 0=leste, anti-horário)
-ARC_EXTENT = 270          # varredura total
+# ── Variáveis Globais de Controle ───────────────────────────
+current_size = WIN_SIZE
+disk_labels = []
 
-# ── Funções auxiliares ─────────────────────────────────────
-
-def deg_to_tk(deg):
-    """Converte grau 'matemático' para grau Tkinter (anti-horário a partir do leste)."""
-    return deg  # já estamos usando sistema Tkinter
-
-def value_to_angle(value, min_v=0, max_v=100):
-    """Converte 0-100 para ângulo dentro do arco."""
-    fraction = max(0.0, min(1.0, value / (max_v - min_v)))
-    return ARC_START - fraction * ARC_EXTENT   # decresce (anti-horário = aumenta no Tkinter)
+# ── Funções de Desenho e Geometria ─────────────────────────
 
 def polar(cx, cy, r, angle_deg):
-    """Ponto na circunferência dado ângulo em graus (0=leste, anti-horário)."""
     rad = math.radians(angle_deg)
     return cx + r * math.cos(rad), cy - r * math.sin(rad)
 
 def draw_ticks(canvas, cx, cy, r_inner, r_outer, n, color, width=1):
     for i in range(n + 1):
-        angle = ARC_START - (i / n) * ARC_EXTENT
+        angle = 225 - (i / n) * 270
         x1, y1 = polar(cx, cy, r_inner, angle)
         x2, y2 = polar(cx, cy, r_outer, angle)
-        canvas.create_line(x1, y1, x2, y2, fill=color, width=width)
+        canvas.create_line(x1, y1, x2, y2, fill=color, width=width, tags="static")
 
-# ── Janela e canvas ────────────────────────────────────────
+def redraw_ui():
+    """Redesenha toda a interface baseada no tamanho atual."""
+    global CX, CY, RADIUS, ARC_START, ARC_EXTENT
+    canvas.delete("all")
+    
+    CX, CY = current_size // 2, current_size // 2
+    RADIUS = int(85 * (current_size / 220))
+    ARC_START = 225
+    ARC_EXTENT = 270
+    
+    scale = current_size / 220
 
-root = tk.Tk()
-root.title("Monitor")
-root.geometry(f"{WIN_SIZE}x{WIN_SIZE}+100+100")
-root.resizable(False, False)
-root.overrideredirect(True)          # sem borda
-root.attributes("-topmost", True)    # sempre no topo
-root.attributes("-alpha", WIN_ALPHA)
+    # Círculo externo
+    m = 4 * scale
+    canvas.create_oval(m, m, current_size - m, current_size - m,
+                       fill=BG_OUTER, outline="#b0b0b0", width=2*scale, tags="static")
 
-# Fundo transparente (Windows)
-if sys.platform == "win32":
-    root.attributes("-transparentcolor", "")
+    # Círculo interno
+    pad = 18 * scale
+    canvas.create_oval(pad, pad, current_size - pad, current_size - pad,
+                       fill=BG_INNER, outline="#c8c8c8", width=1*scale, tags="static")
 
-canvas = tk.Canvas(root, width=WIN_SIZE, height=WIN_SIZE,
-                   bg=BG_OUTER, highlightthickness=0)
-canvas.pack()
+    # Ticks
+    draw_ticks(canvas, CX, CY, RADIUS + (4*scale), RADIUS + (9*scale),  50, TICK_MINOR, 1)
+    draw_ticks(canvas, CX, CY, RADIUS + (4*scale), RADIUS + (13*scale), 10, TICK_MAJOR, max(1, int(2*scale)))
 
-# ── Arrastar janela ────────────────────────────────────────
-_drag = {"x": 0, "y": 0}
+    # Elementos dinâmicos
+    global arc_cpu_id, val_cpu_id, lbl_ram_id, disk_labels
+    
+    # Arco fundo
+    canvas.create_arc(CX - RADIUS, CY - RADIUS, CX + RADIUS, CY + RADIUS,
+                      start=ARC_START - ARC_EXTENT, extent=ARC_EXTENT,
+                      style=tk.ARC, outline=ARC_BG, width=6*scale)
 
-def on_press(e):
-    _drag["x"] = e.x
-    _drag["y"] = e.y
+    # Arco CPU
+    arc_cpu_id = canvas.create_arc(CX - RADIUS, CY - RADIUS, CX + RADIUS, CY + RADIUS,
+                                   start=ARC_START - ARC_EXTENT, extent=1,
+                                   style=tk.ARC, outline=ARC_CPU, width=6*scale)
 
-def on_drag(e):
-    dx = e.x - _drag["x"]
-    dy = e.y - _drag["y"]
-    x  = root.winfo_x() + dx
-    y  = root.winfo_y() + dy
-    root.geometry(f"+{x}+{y}")
+    # Textos
+    canvas.create_text(CX, CY - (32*scale), text="CPU %",
+                       font=("Segoe UI", int(11*scale), "normal"), fill=TEXT_LABEL)
 
-canvas.bind("<ButtonPress-1>", on_press)
-canvas.bind(DRAG_BTN, on_drag)
+    val_cpu_id = canvas.create_text(CX, CY - (2*scale), text="0",
+                                   font=("Segoe UI", int(36*scale), "bold"), fill=TEXT_VALUE)
 
-# Fechar com duplo-clique
-canvas.bind("<Double-Button-1>", lambda e: root.destroy())
+    lbl_ram_id = canvas.create_text(CX, CY + (28*scale), text="RAM 0 %",
+                                   font=("Segoe UI", int(11*scale), "normal"), fill=TEXT_RAM)
 
-# ── Desenho estático (fundo, ticks, círculos) ──────────────
-
-def draw_static():
-    canvas.delete("static")
-
-    # Círculo externo (moldura)
-    m = 4
-    canvas.create_oval(m, m, WIN_SIZE - m, WIN_SIZE - m,
-                       fill=BG_OUTER, outline="#b0b0b0", width=2, tags="static")
-
-    # Círculo interno (face)
-    pad = 18
-    canvas.create_oval(pad, pad, WIN_SIZE - pad, WIN_SIZE - pad,
-                       fill=BG_INNER, outline="#c8c8c8", width=1, tags="static")
-
-    # Ticks menores
-    draw_ticks(canvas, CX, CY, RADIUS + 4, RADIUS + 9,  50, TICK_MINOR, 1)
-    # Ticks maiores
-    draw_ticks(canvas, CX, CY, RADIUS + 4, RADIUS + 13, 10, TICK_MAJOR, 2)
-
-draw_static()
-
-# ── Elementos dinâmicos ────────────────────────────────────
-
-# IDs dos items dinâmicos
-arc_bg_id  = canvas.create_arc(CX - RADIUS, CY - RADIUS,
-                                CX + RADIUS, CY + RADIUS,
-                                start=ARC_START - ARC_EXTENT,
-                                extent=ARC_EXTENT,
-                                style=tk.ARC,
-                                outline=ARC_BG, width=6)
-
-arc_cpu_id = canvas.create_arc(CX - RADIUS, CY - RADIUS,
-                                CX + RADIUS, CY + RADIUS,
-                                start=ARC_START - ARC_EXTENT,
-                                extent=1,
-                                style=tk.ARC,
-                                outline=ARC_CPU, width=6)
-
-lbl_cpu_id = canvas.create_text(CX, CY - 40, text="CPU %",
-                                 font=("Segoe UI", 11, "normal"),
-                                 fill=TEXT_LABEL)
-
-val_cpu_id = canvas.create_text(CX, CY -10,  text="0",
-                                 font=("Segoe UI", 36, "bold"),
-                                 fill=TEXT_VALUE)
-
-lbl_ram_id = canvas.create_text(CX, CY + 28, text="RAM 0 %",
-                                 font=("Segoe UI", 11, "normal"),
-                                 fill=TEXT_RAM)
-
-# Lista para armazenar os IDs dos textos dos discos
-disk_labels = []
-
-def setup_disks():
-    """Detecta discos e cria os elementos de texto no canvas."""
-    global disk_labels
+    # Discos
+    disk_labels = []
     try:
         partitions = [p.mountpoint for p in psutil.disk_partitions() if 'fixed' in p.opts]
     except:
         partitions = ['C:\\']
     
-    y_offset = 50
+    y_offset = 44 * scale
     for i, p in enumerate(partitions):
         lbl_id = canvas.create_text(CX, CY + y_offset, text=f"HD{i+1} 0 %",
-                                     font=("Segoe UI", 9, "normal"),
+                                     font=("Segoe UI", int(9*scale), "normal"),
                                      fill=TEXT_RAM)
         disk_labels.append((lbl_id, p))
-        y_offset += 14  # Espaçamento entre discos
+        y_offset += 14 * scale
 
-setup_disks()
+# ── Janela e Eventos ────────────────────────────────────────
 
-# ── Loop de atualização ────────────────────────────────────
+root = tk.Tk()
+root.overrideredirect(True)
+root.attributes("-topmost", True)
+root.attributes("-alpha", WIN_ALPHA)
+
+canvas = tk.Canvas(root, bg=BG_OUTER, highlightthickness=0)
+canvas.pack(fill=tk.BOTH, expand=True)
+
+def on_mouse_wheel(event):
+    global current_size
+    # No Windows, event.delta é 120 ou -120
+    if event.delta > 0:
+        current_size = min(600, current_size + 20)
+    else:
+        current_size = max(120, current_size - 20)
+    
+    root.geometry(f"{current_size}x{current_size}")
+    redraw_ui()
+    # update() removido daqui para evitar múltiplos loops
+
+root.bind("<MouseWheel>", on_mouse_wheel)
+
+# Arrastar
+_drag = {"x": 0, "y": 0}
+def on_press(e):
+    _drag["x"] = e.x
+    _drag["y"] = e.y
+def on_drag(e):
+    dx, dy = e.x - _drag["x"], e.y - _drag["y"]
+    root.geometry(f"+{root.winfo_x() + dx}+{root.winfo_y() + dy}")
+
+canvas.bind("<ButtonPress-1>", on_press)
+canvas.bind(DRAG_BTN, on_drag)
+canvas.bind("<Double-Button-1>", lambda e: root.destroy())
+
+# ── Loop de Atualização ────────────────────────────────────
 
 def update():
-    cpu = psutil.cpu_percent(interval=None)
-    ram = psutil.virtual_memory().percent
+    try:
+        cpu = psutil.cpu_percent(interval=None)
+        ram = psutil.virtual_memory().percent
 
-    # Arco CPU e cor do alerta
-    cpu_color = COLOR_DANGER if cpu > 90 else ARC_CPU
-    extent = (cpu / 100) * ARC_EXTENT
-    if extent < 1:
-        extent = 1
+        cpu_color = COLOR_DANGER if cpu > 90 else ARC_CPU
+        extent = max(1, (cpu / 100) * 270)
+        
+        canvas.itemconfig(arc_cpu_id, extent=extent, outline=cpu_color)
+        canvas.itemconfig(val_cpu_id, text=str(int(cpu)), fill=cpu_color)
+        
+        ram_color = COLOR_DANGER if ram > 90 else TEXT_RAM
+        canvas.itemconfig(lbl_ram_id, text=f"RAM {int(ram)} %", fill=ram_color)
 
-    canvas.itemconfig(arc_cpu_id, extent=extent, outline=cpu_color)
-    canvas.itemconfig(val_cpu_id, text=str(int(cpu)), fill=cpu_color)
-    
-    # RAM
-    ram_color = COLOR_DANGER if ram > 90 else TEXT_RAM
-    canvas.itemconfig(lbl_ram_id, text=f"RAM {int(ram)} %", fill=ram_color)
-
-    # Atualiza cada disco detectado
-    for lbl_id, path in disk_labels:
-        try:
-            # .percent já retorna o espaço USADO (ex: 80% ocupado)
-            usage = psutil.disk_usage(path).percent
-            color = COLOR_DANGER if usage > 95 else TEXT_RAM
-            # Mostra HDX [Uso]%
-            canvas.itemconfig(lbl_id, text=f"HD{disk_labels.index((lbl_id, path))+1} {int(usage)} %", fill=color)
-        except:
-            pass
+        for lbl_id, path in disk_labels:
+            try:
+                usage = psutil.disk_usage(path).percent
+                color = COLOR_DANGER if usage > 95 else TEXT_RAM
+                idx = [x[0] for x in disk_labels].index(lbl_id)
+                canvas.itemconfig(lbl_id, text=f"HD{idx+1} {int(usage)} %", fill=color)
+            except: pass
+    except: pass
 
     root.after(UPDATE_MS, update)
+
+# Inicialização
+root.geometry(f"{current_size}x{current_size}+100+100")
+redraw_ui()
 update()
 root.mainloop()
