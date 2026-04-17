@@ -127,17 +127,38 @@ arc_cpu_id = canvas.create_arc(CX - RADIUS, CY - RADIUS,
                                 style=tk.ARC,
                                 outline=ARC_CPU, width=6)
 
-lbl_cpu_id = canvas.create_text(CX, CY - 22, text="CPU %",
+lbl_cpu_id = canvas.create_text(CX, CY - 40, text="CPU %",
                                  font=("Segoe UI", 11, "normal"),
                                  fill=TEXT_LABEL)
 
-val_cpu_id = canvas.create_text(CX, CY + 8,  text="0",
+val_cpu_id = canvas.create_text(CX, CY -10,  text="0",
                                  font=("Segoe UI", 36, "bold"),
                                  fill=TEXT_VALUE)
 
-lbl_ram_id = canvas.create_text(CX, CY + 38, text="RAM 0 %",
+lbl_ram_id = canvas.create_text(CX, CY + 28, text="RAM 0 %",
                                  font=("Segoe UI", 11, "normal"),
                                  fill=TEXT_RAM)
+
+# Lista para armazenar os IDs dos textos dos discos
+disk_labels = []
+
+def setup_disks():
+    """Detecta discos e cria os elementos de texto no canvas."""
+    global disk_labels
+    try:
+        partitions = [p.mountpoint for p in psutil.disk_partitions() if 'fixed' in p.opts]
+    except:
+        partitions = ['C:\\']
+    
+    y_offset = 50
+    for i, p in enumerate(partitions):
+        lbl_id = canvas.create_text(CX, CY + y_offset, text=f"HD{i+1} 0 %",
+                                     font=("Segoe UI", 9, "normal"),
+                                     fill=TEXT_RAM)
+        disk_labels.append((lbl_id, p))
+        y_offset += 14  # Espaçamento entre discos
+
+setup_disks()
 
 # ── Loop de atualização ────────────────────────────────────
 
@@ -152,12 +173,22 @@ def update():
         extent = 1
 
     canvas.itemconfig(arc_cpu_id, extent=extent, outline=cpu_color)
-
-    # Textos e cor da RAM
-    ram_color = COLOR_DANGER if ram > 90 else TEXT_RAM
-
     canvas.itemconfig(val_cpu_id, text=str(int(cpu)), fill=cpu_color)
+    
+    # RAM
+    ram_color = COLOR_DANGER if ram > 90 else TEXT_RAM
     canvas.itemconfig(lbl_ram_id, text=f"RAM {int(ram)} %", fill=ram_color)
+
+    # Atualiza cada disco detectado
+    for lbl_id, path in disk_labels:
+        try:
+            # .percent já retorna o espaço USADO (ex: 80% ocupado)
+            usage = psutil.disk_usage(path).percent
+            color = COLOR_DANGER if usage > 95 else TEXT_RAM
+            # Mostra HDX [Uso]%
+            canvas.itemconfig(lbl_id, text=f"HD{disk_labels.index((lbl_id, path))+1} {int(usage)} %", fill=color)
+        except:
+            pass
 
     root.after(UPDATE_MS, update)
 update()
