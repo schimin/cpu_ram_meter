@@ -94,7 +94,7 @@ def redraw_ui():
     draw_ticks(canvas, CX, CY, RADIUS + (4*scale), RADIUS + (13*scale), 10, TICK_MAJOR, max(1, int(2*scale)))
 
     # Elementos dinâmicos
-    global arc_cpu_id, arc_ram_id, val_cpu_id, lbl_ram_id, browser_val_id, disk_labels
+    global arc_cpu_id, arc_ram_id, arc_ram_browser_id, val_cpu_id, lbl_ram_id, browser_val_id, disk_labels
     
     # ── Indicador CPU (Grande) ──────────────────────────────
     # Arco fundo
@@ -122,31 +122,37 @@ def redraw_ui():
                       start=ARC_START - ARC_EXTENT, extent=ARC_EXTENT,
                       style=tk.ARC, outline=ARC_BG, width=5*scale)
 
-    # Arco RAM Dinâmico
+    # Arco RAM Dinâmico (Sistema/Base)
     arc_ram_id = canvas.create_arc(R_CX - R_RADIUS, R_CY - R_RADIUS, R_CX + R_RADIUS, R_CY + R_RADIUS,
                                    start=ARC_START - ARC_EXTENT, extent=1,
                                    style=tk.ARC, outline=TEXT_RAM, width=5*scale)
+    
+    # Arco RAM Dinâmico (Navegador - em Vermelho)
+    arc_ram_browser_id = canvas.create_arc(R_CX - R_RADIUS, R_CY - R_RADIUS, R_CX + R_RADIUS, R_CY + R_RADIUS,
+                                   start=ARC_START - ARC_EXTENT, extent=1,
+                                   style=tk.ARC, outline=COLOR_DANGER, width=5*scale)
 
     canvas.create_text(R_CX, R_CY - (14*scale), text="RAM %",
                        font=("Segoe UI", int(8*scale), "normal"), fill=TEXT_LABEL)
 
-    lbl_ram_id = canvas.create_text(R_CX, R_CY + (4*scale), text="0",
+    lbl_ram_id = canvas.create_text(R_CX, R_CY - (1*scale), text="0",
                                    font=("Segoe UI", int(18*scale), "bold"), fill=TEXT_RAM)
 
-    # ── Browser Icon & Text (Deslocado para baixo) ─────────
-    ix = CX - (20 * scale)
-    iy = CY + (92 * scale)
-    ir = 7 * scale
+    # UI do Navegador embutida na RAM (ícone pequeno + valor)
+    ix_emb = R_CX - (15 * scale)
+    iy_emb = R_CY + (14 * scale)
+    ir_emb = 4 * scale
     
-    canvas.create_arc(ix-ir, iy-ir, ix+ir, iy+ir, start=90, extent=120, fill="#DB4437", outline="", tags="browser_ui")
-    canvas.create_arc(ix-ir, iy-ir, ix+ir, iy+ir, start=210, extent=120, fill="#0F9D58", outline="", tags="browser_ui")
-    canvas.create_arc(ix-ir, iy-ir, ix+ir, iy+ir, start=330, extent=120, fill="#F4B400", outline="", tags="browser_ui")
-    cr = ir * 0.4
-    canvas.create_oval(ix-cr, iy-cr, ix+cr, iy+cr, fill="#4285F4", outline="#f0f0f0", width=1, tags="browser_ui")
+    # Desenho do ícone (tag 'browser_ui' para controle de visibilidade)
+    canvas.create_arc(ix_emb-ir_emb, iy_emb-ir_emb, ix_emb+ir_emb, iy_emb+ir_emb, start=90, extent=120, fill="#DB4437", outline="", tags="browser_ui")
+    canvas.create_arc(ix_emb-ir_emb, iy_emb-ir_emb, ix_emb+ir_emb, iy_emb+ir_emb, start=210, extent=120, fill="#0F9D58", outline="", tags="browser_ui")
+    canvas.create_arc(ix_emb-ir_emb, iy_emb-ir_emb, ix_emb+ir_emb, iy_emb+ir_emb, start=330, extent=120, fill="#F4B400", outline="", tags="browser_ui")
+    cr_emb = ir_emb * 0.4
+    canvas.create_oval(ix_emb-cr_emb, iy_emb-cr_emb, ix_emb+cr_emb, iy_emb+cr_emb, fill="#4285F4", outline="#f0f0f0", width=1, tags="browser_ui")
 
-    browser_val_id = canvas.create_text(ix + ir + (4*scale), iy, text="",
-                                       font=("Segoe UI", int(9*scale), "bold"), 
-                                       fill=TEXT_RAM, anchor="w")
+    browser_val_id = canvas.create_text(ix_emb + ir_emb + (2*scale), iy_emb, text="",
+                                       font=("Segoe UI", int(7*scale), "bold"), 
+                                       fill=COLOR_DANGER, anchor="w", tags="browser_ui")
 
     # Discos na horizontal (Ajustado para o limite inferior)
     disk_labels = []
@@ -222,18 +228,33 @@ def update():
         canvas.itemconfig(arc_cpu_id, extent=extent, outline=cpu_color)
         canvas.itemconfig(val_cpu_id, text=str(int(cpu)), fill=cpu_color)
         
-        ram_color = COLOR_DANGER if ram > 90 else TEXT_RAM
-        extent_ram = max(1, (ram / 100) * 270)
-        canvas.itemconfig(arc_ram_id, extent=extent_ram, outline=ram_color)
-        canvas.itemconfig(lbl_ram_id, text=str(int(ram)), fill=ram_color)
+        # Update RAM Indicator (Merged System + Browser)
+        browser_text, b_percent = get_browser_memory()
+        
+        # total_ram = ram
+        # s_percent = RAM do sistema (Total - Navegador)
+        s_percent = max(0, ram - b_percent)
+        
+        ext_s = (s_percent / 100) * 270
+        ext_b = (b_percent / 100) * 270
+        
+        # Cor de perigo se o TOTAL passar de 90%
+        main_ram_color = COLOR_DANGER if ram > 90 else TEXT_RAM
+        
+        # Atualiza Arco Sistema (Preto/Base)
+        canvas.itemconfig(arc_ram_id, extent=max(0.1, ext_s), outline=main_ram_color)
+        
+        # Atualiza Arco Navegador (Vermelho) - começa onde o do sistema termina
+        start_b = (ARC_START - ARC_EXTENT) + ext_s
+        canvas.itemconfig(arc_ram_browser_id, start=start_b, extent=max(0.1, ext_b) if b_percent > 0 else 0)
+        
+        canvas.itemconfig(lbl_ram_id, text=str(int(ram)), fill=main_ram_color)
 
-        # Update Browser Memory (Icon and Text)
-        browser_text, _ = get_browser_memory()
+        # Update Browser Icon & Mini-Text
         if browser_text:
-            canvas.itemconfig(browser_val_id, text=browser_text)
+            canvas.itemconfig(browser_val_id, text=f"{int(b_percent)}%")
             canvas.itemconfig("browser_ui", state="normal")
         else:
-            canvas.itemconfig(browser_val_id, text="")
             canvas.itemconfig("browser_ui", state="hidden")
 
         for lbl_id, path in disk_labels:

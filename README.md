@@ -31,6 +31,7 @@ pip install -r requirements.txt
 Execute o aplicativo:
 
 ```bash
+
 python main.py
 ```
 ## Para gerar o executável para windows
