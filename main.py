@@ -94,8 +94,9 @@ def redraw_ui():
     draw_ticks(canvas, CX, CY, RADIUS + (4*scale), RADIUS + (13*scale), 10, TICK_MAJOR, max(1, int(2*scale)))
 
     # Elementos dinâmicos
-    global arc_cpu_id, val_cpu_id, lbl_ram_id, browser_val_id, disk_labels
+    global arc_cpu_id, arc_ram_id, val_cpu_id, lbl_ram_id, browser_val_id, disk_labels
     
+    # ── Indicador CPU (Grande) ──────────────────────────────
     # Arco fundo
     canvas.create_arc(CX - RADIUS, CY - RADIUS, CX + RADIUS, CY + RADIUS,
                       start=ARC_START - ARC_EXTENT, extent=ARC_EXTENT,
@@ -106,34 +107,70 @@ def redraw_ui():
                                    start=ARC_START - ARC_EXTENT, extent=1,
                                    style=tk.ARC, outline=ARC_CPU, width=6*scale)
 
-    # Textos
-    canvas.create_text(CX, CY - (32*scale), text="CPU %",
+    canvas.create_text(CX, CY - (52*scale), text="CPU %",
                        font=("Segoe UI", int(11*scale), "normal"), fill=TEXT_LABEL)
 
-    val_cpu_id = canvas.create_text(CX, CY - (2*scale), text="0",
-                                   font=("Segoe UI", int(36*scale), "bold"), fill=TEXT_VALUE)
+    val_cpu_id = canvas.create_text(CX, CY - (22*scale), text="0",
+                                   font=("Segoe UI", int(40*scale), "bold"), fill=TEXT_VALUE)
 
-    lbl_ram_id = canvas.create_text(CX, CY + (28*scale), text="RAM 0 %",
-                                   font=("Segoe UI", int(11*scale), "normal"), fill=TEXT_RAM)
+    # ── Indicador RAM (Aumentado) ───────────────────────────
+    R_RADIUS = 30 * scale
+    R_CX, R_CY = CX, CY + (48 * scale)
+    
+    # Arco fundo RAM
+    canvas.create_arc(R_CX - R_RADIUS, R_CY - R_RADIUS, R_CX + R_RADIUS, R_CY + R_RADIUS,
+                      start=ARC_START - ARC_EXTENT, extent=ARC_EXTENT,
+                      style=tk.ARC, outline=ARC_BG, width=5*scale)
 
-    # Browser Text (Between RAM and HD)
-    browser_val_id = canvas.create_text(CX, CY + (41*scale), text="",
-                                       font=("Segoe UI", int(9*scale), "bold"), fill=TEXT_RAM)
+    # Arco RAM Dinâmico
+    arc_ram_id = canvas.create_arc(R_CX - R_RADIUS, R_CY - R_RADIUS, R_CX + R_RADIUS, R_CY + R_RADIUS,
+                                   start=ARC_START - ARC_EXTENT, extent=1,
+                                   style=tk.ARC, outline=TEXT_RAM, width=5*scale)
 
-    # Discos
+    canvas.create_text(R_CX, R_CY - (14*scale), text="RAM %",
+                       font=("Segoe UI", int(8*scale), "normal"), fill=TEXT_LABEL)
+
+    lbl_ram_id = canvas.create_text(R_CX, R_CY + (4*scale), text="0",
+                                   font=("Segoe UI", int(18*scale), "bold"), fill=TEXT_RAM)
+
+    # ── Browser Icon & Text (Deslocado para baixo) ─────────
+    ix = CX - (20 * scale)
+    iy = CY + (92 * scale)
+    ir = 7 * scale
+    
+    canvas.create_arc(ix-ir, iy-ir, ix+ir, iy+ir, start=90, extent=120, fill="#DB4437", outline="", tags="browser_ui")
+    canvas.create_arc(ix-ir, iy-ir, ix+ir, iy+ir, start=210, extent=120, fill="#0F9D58", outline="", tags="browser_ui")
+    canvas.create_arc(ix-ir, iy-ir, ix+ir, iy+ir, start=330, extent=120, fill="#F4B400", outline="", tags="browser_ui")
+    cr = ir * 0.4
+    canvas.create_oval(ix-cr, iy-cr, ix+cr, iy+cr, fill="#4285F4", outline="#f0f0f0", width=1, tags="browser_ui")
+
+    browser_val_id = canvas.create_text(ix + ir + (4*scale), iy, text="",
+                                       font=("Segoe UI", int(9*scale), "bold"), 
+                                       fill=TEXT_RAM, anchor="w")
+
+    # Discos na horizontal (Ajustado para o limite inferior)
     disk_labels = []
     try:
-        partitions = [p.mountpoint for p in psutil.disk_partitions() if 'fixed' in p.opts]
+        partitions = []
+        seen = set()
+        for p in psutil.disk_partitions():
+            if 'fixed' in p.opts and p.mountpoint not in seen:
+                partitions.append(p.mountpoint)
+                seen.add(p.mountpoint)
+        if not partitions: partitions = ['C:\\']
     except:
         partitions = ['C:\\']
     
-    y_offset = 54 * scale
+    n_disks = len(partitions)
+    y_pos = current_size - (10 * scale)
+    
     for i, p in enumerate(partitions):
-        lbl_id = canvas.create_text(CX, CY + y_offset, text=f"HD{i+1} 0 %",
-                                     font=("Segoe UI", int(9*scale), "normal"),
+        # Distribui horizontalmente
+        x_pos = (current_size / (n_disks + 1)) * (i + 1)
+        lbl_id = canvas.create_text(x_pos, y_pos, text=f"HD{i+1} 0%",
+                                     font=("Segoe UI", int(8*scale), "bold"),
                                      fill=TEXT_RAM)
         disk_labels.append((lbl_id, p))
-        y_offset += 14 * scale
 
 # ── Janela e Eventos ────────────────────────────────────────
 
@@ -186,11 +223,18 @@ def update():
         canvas.itemconfig(val_cpu_id, text=str(int(cpu)), fill=cpu_color)
         
         ram_color = COLOR_DANGER if ram > 90 else TEXT_RAM
-        canvas.itemconfig(lbl_ram_id, text=f"RAM {int(ram)} %", fill=ram_color)
+        extent_ram = max(1, (ram / 100) * 270)
+        canvas.itemconfig(arc_ram_id, extent=extent_ram, outline=ram_color)
+        canvas.itemconfig(lbl_ram_id, text=str(int(ram)), fill=ram_color)
 
-        # Update Browser Memory (Text Only)
+        # Update Browser Memory (Icon and Text)
         browser_text, _ = get_browser_memory()
-        canvas.itemconfig(browser_val_id, text=f"Web: {browser_text}" if browser_text else "")
+        if browser_text:
+            canvas.itemconfig(browser_val_id, text=browser_text)
+            canvas.itemconfig("browser_ui", state="normal")
+        else:
+            canvas.itemconfig(browser_val_id, text="")
+            canvas.itemconfig("browser_ui", state="hidden")
 
         for lbl_id, path in disk_labels:
             try:
