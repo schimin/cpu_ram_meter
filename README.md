@@ -51,9 +51,9 @@ Use como preferir. Este projeto não inclui uma licença específica.
 
 # EXE
 
-+ ---- +
-+ Versão +
-+ ---- + 
-+ [1.0](https://github.com/schimin/cpu_ram_meter/blob/main/dist/CpuRamMeter.exe) +
-+ [1.2](https://github.com/schimin/cpu_ram_meter/blob/main/dist/CpuRamMeter-1.2.exe) +
-+ ---- + 
+## Versões Disponíveis
+
+| Versão | Download |
+| :--- | :--- |
+| **1.0** | [CpuRamMeter.exe](https://github.com/schimin/cpu_ram_meter/blob/main/dist/CpuRamMeter.exe) |
+| **1.2** | [CpuRamMeter-1.2.exe](https://github.com/schimin/cpu_ram_meter/blob/main/dist/CpuRamMeter-1.2.exe) |
