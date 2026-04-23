@@ -24,6 +24,35 @@ COLOR_DANGER = "#e74c3c"
 # ── Variáveis Globais de Controle ───────────────────────────
 current_size = WIN_SIZE
 disk_labels = []
+browser_val_id = None
+
+# ── Funções de Métricas ──────────────────────────────────────
+
+def get_browser_memory():
+    browsers = ["chrome.exe", "firefox.exe", "msedge.exe", "brave.exe", "opera.exe", "browser.exe"]
+    total_mem = 0
+    found = False
+    for proc in psutil.process_iter(['name', 'memory_info']):
+        try:
+            name = proc.info['name']
+            if name and name.lower() in browsers:
+                total_mem += proc.info['memory_info'].rss
+                found = True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+    
+    if not found:
+        return "", 0
+        
+    mb = total_mem / (1024 * 1024)
+    if mb < 1000:
+        text = f"{int(mb)}Mb"
+    else:
+        text = f"{total_mem / (1024**3):.1f}Gb"
+    
+    total_system_ram = psutil.virtual_memory().total
+    percent = (total_mem / total_system_ram) * 100
+    return text, percent
 
 # ── Funções de Desenho e Geometria ─────────────────────────
 
@@ -65,7 +94,7 @@ def redraw_ui():
     draw_ticks(canvas, CX, CY, RADIUS + (4*scale), RADIUS + (13*scale), 10, TICK_MAJOR, max(1, int(2*scale)))
 
     # Elementos dinâmicos
-    global arc_cpu_id, val_cpu_id, lbl_ram_id, disk_labels
+    global arc_cpu_id, val_cpu_id, lbl_ram_id, browser_val_id, disk_labels
     
     # Arco fundo
     canvas.create_arc(CX - RADIUS, CY - RADIUS, CX + RADIUS, CY + RADIUS,
@@ -87,6 +116,10 @@ def redraw_ui():
     lbl_ram_id = canvas.create_text(CX, CY + (28*scale), text="RAM 0 %",
                                    font=("Segoe UI", int(11*scale), "normal"), fill=TEXT_RAM)
 
+    # Browser Text (Between RAM and HD)
+    browser_val_id = canvas.create_text(CX, CY + (41*scale), text="",
+                                       font=("Segoe UI", int(9*scale), "bold"), fill=TEXT_RAM)
+
     # Discos
     disk_labels = []
     try:
@@ -94,7 +127,7 @@ def redraw_ui():
     except:
         partitions = ['C:\\']
     
-    y_offset = 44 * scale
+    y_offset = 54 * scale
     for i, p in enumerate(partitions):
         lbl_id = canvas.create_text(CX, CY + y_offset, text=f"HD{i+1} 0 %",
                                      font=("Segoe UI", int(9*scale), "normal"),
@@ -154,6 +187,10 @@ def update():
         
         ram_color = COLOR_DANGER if ram > 90 else TEXT_RAM
         canvas.itemconfig(lbl_ram_id, text=f"RAM {int(ram)} %", fill=ram_color)
+
+        # Update Browser Memory (Text Only)
+        browser_text, _ = get_browser_memory()
+        canvas.itemconfig(browser_val_id, text=f"Web: {browser_text}" if browser_text else "")
 
         for lbl_id, path in disk_labels:
             try:
